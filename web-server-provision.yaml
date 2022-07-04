@@ -1,0 +1,68 @@
+- hosts: web-server
+  remote_user: ubuntu
+  become: true
+
+  tasks:
+    - name: Update all packages
+      apt:
+        update_cache: yes
+        name: "*"
+        state: latest
+
+    - name: Install depecdencies
+      apt:
+        pkg:
+          - python3-dev
+          - python3-pip
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - htop
+
+    - name: Install apt key
+      ansible.builtin.apt_key:
+        url: "https://download.docker.com/linux/ubuntu/gpg"
+        state: present
+        keyring: /etc/apt/trusted.gpg.d/docker.gpg
+
+    - name: Install docker repo
+      apt_repository:
+        repo: "deb [arch=amd64 signed-by=/etc/apt/trusted.gpg.d/docker.gpg] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+        filename: docker
+
+    - name: Install docker
+      apt:
+        update_cache: yes
+        pkg:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker
+
+    - name: install python sdk
+      pip:
+        name:
+          - docker
+          - docker-compose
+
+    - name: Copy private key
+      copy:
+        content: /home/ubuntu/.ssh/id_ed25519
+        dest:  /home/ubuntu/.ssh/id_ed25519
+    
+    - name: Clone app github repository
+      git:
+        repo: https://github.com/fanrita/flask-api.git
+        dest: /home/ubuntu/project
+        key_file: /home/ubuntu/.ssh/id_ed25519
+        clone: yes
+        update: yes
+      become_user: ubuntu
+
+    - name: Run `docker-compose up`
+      docker_compose:
+        project_src: /home/ubuntu/project
+        state: present
+
