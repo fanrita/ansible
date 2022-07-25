@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+    app:
+        build: ./
+        ports:
+            - '5000:5000'
+        restart: 'always'
+        environment:
+            DB_HOSTNAME: {{ hostvars["master"]["private_ip"] }}
+            DB_USERNAME: {{ DB_USERNAME }}
+            DB_PASSWORD: {{ DB_PASSWORD }}
+            DB_NAME: student
+        networks:
+            - api
+networks:
+    api: 
+        name: flaskapi

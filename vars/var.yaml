@@ -1,0 +1,4 @@
+mysql_replica_username: replica
+mysql_replica_password: Passw0rdf0rRepl
+DB_USERNAME: devops
+DB_PASSWORD: devops
