@@ -1,6 +1,8 @@
 - hosts: web-server
   remote_user: ubuntu
   become: true
+  vars_files:
+    - vars/var.yaml
 
   tasks:
     - name: Update all packages
@@ -9,7 +11,7 @@
         name: "*"
         state: latest
 
-    - name: Install depecdencies
+    - name: Install dependencies
       apt:
         pkg:
           - python3-dev
@@ -61,8 +63,15 @@
         update: yes
       become_user: ubuntu
 
+    - name: Copy compose file
+      template:
+        src: templates/docker-compose.yaml.j2
+        dest: /home/ubuntu/project/docker-compose.yml
+        owner: root
+        group: root
+        mode: 0644
+
     - name: Run `docker-compose up`
       docker_compose:
         project_src: /home/ubuntu/project
         state: present
-
