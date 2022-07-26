@@ -1,0 +1,107 @@
+- hosts: db_servers
+  remote_user: ubuntu
+  become: true
+  gather_facts: yes
+  vars_files:
+    - vars/var.yaml
+
+  tasks:
+    - name: Update all packages
+      apt:
+        update_cache: yes
+        name: "*"
+        state: latest
+
+    - name: Set hostname
+      hostname:
+        name: "{{ inventory_hostname }}"
+
+    - name: Install dependencies
+      apt:
+        pkg:
+          - python3-dev
+          - python3-pip
+          - ca-certificates
+          - curl
+          - gnupg2
+          - lsb-release
+          - htop
+
+    - name: install mysqlclient
+      pip:
+        name:
+          - PyMySQL
+
+    - name: Add Percona repo
+      apt:
+        deb: "https://repo.percona.com/apt/percona-release_latest.{{ansible_distribution_release}}_all.deb"
+
+    - name: Set Percona dist
+      shell: percona-release setup ps80
+
+    - name: Install Percona 8.0
+      apt: name=percona-server-server state=present update_cache=yes
+
+    - name: Copy conf file
+      template:
+        src: templates/mysqld.cnf.j2
+        dest: /etc/mysql/mysql.conf.d/mysql.cnf
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: Restart DB
+      systemd:
+        name: mysql
+        state: restarted
+
+    - name: Adds required MySQL users with hosts
+      mysql_user:
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        name: '{{ mysql_replica_username }}'
+        password: '{{ mysql_replica_password }}'
+        host: "172.31.%.%"
+        priv: '*.*:REPLICATION SLAVE'
+        state: present
+      when: (inventory_hostname == 'master')
+
+    - name: Get primary binlog and position
+      mysql_replication:
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        mode: getprimary
+      register: master_var
+      when: (inventory_hostname == 'master')
+
+    - name: Stop replica
+      mysql_replication:
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        mode: stopreplica
+      when: (inventory_hostname == 'replica')
+
+    - name: Configure replica on replica
+      mysql_replication:
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        mode: changeprimary
+        primary_user: '{{ mysql_replica_username }}'
+        primary_password: '{{ mysql_replica_password }}'
+        primary_host: '{{ hostvars["master"]["private_ip"] }}'
+        primary_log_file: '{{ hostvars["master"]["master_var"]["File"]}}'
+        primary_log_pos: '{{ hostvars["master"]["master_var"]["Position"]}}'
+      when: (inventory_hostname == 'replica')
+
+    - name: Start replica
+      mysql_replication:
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        mode: startreplica
+      when: (inventory_hostname == 'replica')
+
+    
+    - name: Adds app required MySQL users
+      mysql_user:
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        name: '{{ DB_USERNAME }}'
+        password: '{{ DB_PASSWORD }}'
+        host: "172.31.%.%"
+        priv: '*.*:ALL'
+        state: present
+      when: (inventory_hostname == 'master')
